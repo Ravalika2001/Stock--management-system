@@ -51,6 +51,7 @@ class Product(db.Model):
     Discontinued = Column(Boolean, nullable=False)
 
     category = relationship("Category", back_populates="products")
+    # supplier = relationship('Supplier')
 
     def __repr__(self):
         return f"<Product(ProductID={self.ProductID}, ProductName='{self.ProductName}', CategoryID={self.CategoryID}, UnitPrice={self.UnitPrice}, UnitsInStock={self.UnitsInStock}, UnitsOnOrder={self.UnitsOnOrder}, ReorderLevel={self.ReorderLevel}, Discontinued={self.Discontinued})>"
@@ -123,7 +124,7 @@ class CustomerOrder(db.Model):
     __tablename__ = 'customer_orders'
 
     OrderID = Column(Integer, primary_key=True)
-    CustomerID = Column(Integer, ForeignKey('customers.CustomerID'), nullable=False)
+    customer_id = Column(Integer, ForeignKey('customers.CustomerID'), nullable=False)
     OrderDate = Column(Date, nullable=False)
     ShippingAddress = Column(String(200), nullable=False)
     Quantity = Column(Integer, nullable=False)
@@ -150,7 +151,7 @@ class CustomerOrder(db.Model):
         self.TotalAmount -= discount
 
     def __repr__(self):
-        return f"<CustomerOrder(OrderID={self.OrderID}, CustomerID={self.CustomerID}, OrderDate='{self.OrderDate}', ShippingAddress='{self.ShippingAddress}', Quantity={self.Quantity}, TotalAmount={self.TotalAmount}, Discount={self.Discount})>"
+        return f"<CustomerOrder(OrderID={self.OrderID}, customer_id={self.customer_id}, OrderDate='{self.OrderDate}', ShippingAddress='{self.ShippingAddress}', Quantity={self.Quantity}, TotalAmount={self.TotalAmount}, Discount={self.Discount})>"
 
 # class ConsumerOrderedItems(db.Model):
 #     __tablename__ = 'consumer_ordered_items'

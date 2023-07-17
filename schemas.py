@@ -1,22 +1,10 @@
 
-
 import strawberry
 from typing import List, Optional
 from models import Supplier, Category, Membership, Customer
-
+from sqlalchemy.orm import Session
 from datetime import date, timedelta
 from DAO import *
-
-@strawberry.type
-class SupplierType:
-    supplier_id: int
-    name: str
-    address: str
-    contact: str
-    contact_number: str
-    email: str
-    category_id: Optional[int]
-    category_name: Optional[str]
 
 @strawberry.type
 class CategoryType:
@@ -25,6 +13,19 @@ class CategoryType:
     # def Products(self) -> List[Product]:
     #     return ProductDao.get_product_by_id(self.id)
     
+@strawberry.type
+class SupplierType:
+    supplier_id: int
+    name: str
+    address: str
+    contact: str
+    contact_number: str
+    email: str
+    category_id: int
+    category_name: Optional[str]
+    category: CategoryType
+
+
 @strawberry.type
 class SupplierOrderedItemsType:
     item_id: int
@@ -39,7 +40,7 @@ class Membership:
     membership_type: str
 
 @strawberry.type
-class Product:
+class ProductType:
     product_id: int
     name: str
     description: str
@@ -112,6 +113,7 @@ class CustomerOrder:
     total_amount: float
     discount: float
     product_id: int
+
 @strawberry.input
 class CustomerOrderInput:
     customer_id: int
@@ -134,6 +136,45 @@ class OutboundBill:
 
 @strawberry.type
 class Query:
+    # @strawberry.field
+    # def get_supplier_by_id(self, supplier_id: int) -> Optional[SupplierType]:
+    #     supplier = SupplierDao.get_supplier_by_id(supplier_id)
+    #     if supplier:
+    #         category = CategoryDao.get_category_by_id(supplier.CategoryID)
+    #         category_name = category.CategoryName if category else None
+    #         return SupplierType(
+    #             supplier_id=supplier.SupplierID,
+    #             name=supplier.SupplierName,
+    #             address=supplier.Address,
+    #             contact=supplier.ContactPerson,
+    #             contact_number=supplier.ContactNumber,
+    #             email=supplier.Email,
+    #             category_id=supplier.CategoryID,
+    #             category_name=category_name
+    #         )
+    #     return None
+
+    # @strawberry.field
+    # def get_all_suppliers(self) -> List[SupplierType]:
+    #     suppliers = SupplierDao.get_all_suppliers()
+    #     supplier_types = []
+    #     for supplier in suppliers:
+    #         category = CategoryDao.get_category_by_id(supplier.CategoryID)
+    #         category_name = category.CategoryName if category else None
+    #         supplier_types.append(
+    #             SupplierType(
+    #                 supplier_id=supplier.SupplierID,
+    #                 name=supplier.SupplierName,
+    #                 address=supplier.Address,
+    #                 contact=supplier.ContactPerson,
+    #                 contact_number=supplier.ContactNumber,
+    #                 email=supplier.Email,
+    #                 category_id=supplier.CategoryID,
+    #                 category_name=category_name
+    #             )
+    #         )
+    #     return supplier_types
+
     @strawberry.field
     def get_supplier_by_id(self, supplier_id: int) -> Optional[SupplierType]:
         supplier = SupplierDao.get_supplier_by_id(supplier_id)
@@ -144,11 +185,12 @@ class Query:
                 supplier_id=supplier.SupplierID,
                 name=supplier.SupplierName,
                 address=supplier.Address,
-                contact=supplier.ContactPerson,
+                contact_person=supplier.ContactPerson,
                 contact_number=supplier.ContactNumber,
                 email=supplier.Email,
-                category_id=supplier.CategoryID,
-                category_name=category_name
+                category_id=supplier.categroy_id,
+                category_name=category_name,
+                category=None  # Update the attribute name from category to category_id
             )
         return None
 
@@ -164,11 +206,12 @@ class Query:
                     supplier_id=supplier.SupplierID,
                     name=supplier.SupplierName,
                     address=supplier.Address,
-                    contact=supplier.ContactPerson,
+                    contact_person=supplier.ContactPerson,
                     contact_number=supplier.ContactNumber,
                     email=supplier.Email,
                     category_id=supplier.CategoryID,
-                    category_name=category_name
+                    category_name=category_name,
+                    category=None  # Update the attribute name from category to category_id
                 )
             )
         return supplier_types
@@ -186,6 +229,7 @@ class Query:
             )
             supplier_types.append(supplier_type)
         return supplier_types
+    
     
     @strawberry.field
     def get_category(self, category_id: int) -> Optional[CategoryType]:
@@ -207,36 +251,125 @@ class Query:
             )
             for category in categories
         ]
-    
     @strawberry.field
-    def get_product_by_id(product_id: int) -> Optional[Product]:
+    def get_suppliers_by_name(self, supplier_name: str) -> List[SupplierType]:
+        session = db.session
+
+        suppliers = (
+            session.query(Supplier)
+            .filter(Supplier.SupplierName == supplier_name)
+            .all()
+        )
+
+        session.close()
+
+        supplier_types = [
+            SupplierType(
+                supplier_id=supplier.SupplierID,
+                name=supplier.SupplierName,
+                address=supplier.Address,
+                contact=supplier.ContactPerson,
+                contact_number=supplier.ContactNumber,
+                email=supplier.Email,
+                category_id=supplier.CategoryID,
+                category_name=None,  # Set as None since we don't have category information here
+                category=None  # Set as None since we don't have category information here
+            )
+            for supplier in suppliers
+        ]
+
+        return supplier_types
+
+
+    @strawberry.field
+    def get_product_names_by_supplier_id(self, supplier_id: int) -> List[str]:
+        session=db.session
+
+        products_and_suppliers = (
+        session.query(Product.ProductName,Product.UnitPrice,Category.CategoryName)
+        .join(Supplier, Supplier.CategoryID == Product.CategoryID)
+        .filter(Supplier.SupplierID == supplier_id)
+        .all()
+    )
+
+        session.close()
+
+        return products_and_suppliers
+
+
+    # @strawberry.field
+    # def get_product_by_id(product_id: int) -> Optional[Product]:
+    #     product = ProductDao.get_product_by_id(product_id)
+    #     if product:
+    #         category = CategoryDao.get_category_by_id(product.CategoryID)
+    #         category_name = category.category_name if category and hasattr(category, 'category_name') else None
+    #         return Product(
+    #                 product_id=product.ProductID,
+    #                 name=product.ProductName,
+    #                 description=product.ProductDescription,
+    #                 category_id=product.CategoryID,
+    #                 category_name=category_name,
+    #                 unit_price=product.UnitPrice,
+    #                 units_in_stock=product.UnitsInStock,
+    #                 units_on_order=product.UnitsOnOrder,
+    #                 reorder_level=product.ReorderLevel,
+    #                 discontinued=product.Discontinued
+    #         )
+    #     return None
+
+    # @strawberry.field
+    # def get_all_products() -> List[Product]:
+    #     products = ProductDao.get_all_products()
+    #     result = []
+    #     for product in products:
+    #         category = CategoryDao.get_category_by_id(product.CategoryID)
+    #         category_name = category.category_name if category and hasattr(category, 'category_name') else None
+    #         result.append(
+    #             Product(
+    #                 product_id=product.ProductID,
+    #                 name=product.ProductName,
+    #                 description=product.ProductDescription,
+    #                 category_id=product.CategoryID,
+    #                 category_name=category_name,
+    #                 unit_price=product.UnitPrice,
+    #                 units_in_stock=product.UnitsInStock,
+    #                 units_on_order=product.UnitsOnOrder,
+    #                 reorder_level=product.ReorderLevel,
+    #                 discontinued=product.Discontinued
+    #             )
+    #         )
+    #     return result
+
+
+    @strawberry.field
+    def get_product_by_id(product_id: int) -> Optional[ProductType]:
         product = ProductDao.get_product_by_id(product_id)
         if product:
             category = CategoryDao.get_category_by_id(product.CategoryID)
-            category_name = category.category_name if category and hasattr(category, 'category_name') else None
-            return Product(
-                    product_id=product.ProductID,
-                    name=product.ProductName,
-                    description=product.ProductDescription,
-                    category_id=product.CategoryID,
-                    category_name=category_name,
-                    unit_price=product.UnitPrice,
-                    units_in_stock=product.UnitsInStock,
-                    units_on_order=product.UnitsOnOrder,
-                    reorder_level=product.ReorderLevel,
-                    discontinued=product.Discontinued
+            category_name = category.CategoryName if category else None
+            return ProductType(
+                product_id=product.ProductID,
+                name=product.ProductName,
+                description=product.ProductDescription,
+                category_id=product.CategoryID,
+                category_name=category_name,
+                unit_price=product.UnitPrice,
+                units_in_stock=product.UnitsInStock,
+                units_on_order=product.UnitsOnOrder,
+                reorder_level=product.ReorderLevel,
+                discontinued=product.Discontinued
             )
         return None
 
     @strawberry.field
-    def get_all_products() -> List[Product]:
+    def get_all_products() -> List[ProductType]:
         products = ProductDao.get_all_products()
         result = []
         for product in products:
             category = CategoryDao.get_category_by_id(product.CategoryID)
-            category_name = category.category_name if category and hasattr(category, 'category_name') else None
+            category_name = category.CategoryName if category else None
             result.append(
-                Product(
+                ProductType(
                     product_id=product.ProductID,
                     name=product.ProductName,
                     description=product.ProductDescription,
@@ -250,6 +383,7 @@ class Query:
                 )
             )
         return result
+
     
     @strawberry.field
     def get_membership_by_id(self, membership_id: int) -> Membership:
@@ -274,15 +408,22 @@ class Query:
         # Get all supplier orders from the DAO
         supplier_orders = SupplierOrderDAO.get_all_supplier_orders()
         return supplier_orders
-
+    
     @strawberry.field
-    def get_supplier_name_by_order_id(order_id: int) -> Optional[str]:
-        supplier_order = SupplierOrder.query.get(order_id)
-        if supplier_order and supplier_order.supplier_id:
-            supplier = Supplier.query.get(supplier_order.supplier_id)
-            if supplier:
-                return supplier.SupplierName
-        return None
+    def get_supplier_name_order_id(self, order_id: int) -> Optional[str]:
+        session = db.session
+
+        supplier_name = (
+            session.query(Supplier.SupplierName)
+            .join(SupplierOrder, SupplierOrder.SupplierID == Supplier.SupplierID)
+            .filter(SupplierOrder.OrderID == order_id)
+            .scalar()
+        )
+
+        session.close()
+
+        return supplier_name
+
 
     @strawberry.field
     def get_product_name_by_order_id(order_id: int) -> Optional[str]:
@@ -333,9 +474,45 @@ class Query:
             )
             for customer in customers
         ]
+    
 
+    @strawberry.field
     def get_customer_order_by_id(order_id: int) -> Optional[CustomerOrder]:
         return CustomerOrderDAO.get_customer_order_by_id(order_id)
+    
+    @strawberry.field
+    def get_customers_by_email(self, email: str) -> List[CustomerType]:
+        customers = CustomerDao.get_customers_by_email(email)
+        return [
+            CustomerType(
+                customer_id=customer.CustomerID,
+                name=customer.CustomerName,
+                address=customer.Address,
+                contact=customer.ContactPerson,
+                contact_number=customer.ContactNumber,
+                email=customer.Email,
+                membership_id=customer.membership_id,
+                membership_type=customer.membership.membership_type if customer.membership else None
+            )
+            for customer in customers
+        ]
+
+    @strawberry.field
+    def get_customers_by_name(self, customer_name: str) -> List[CustomerType]:
+        customers = CustomerDao.get_customers_by_name(customer_name)
+        return [
+            CustomerType(
+                customer_id=customer.CustomerID,
+                name=customer.CustomerName,
+                address=customer.Address,
+                contact=customer.ContactPerson,
+                contact_number=customer.ContactNumber,
+                email=customer.Email,
+                membership_id=customer.membership_id,
+                membership_type=customer.membership.membership_type if customer.membership else None
+            )
+            for customer in customers
+        ]
 
     @strawberry.field
     def get_all_customer_orders() -> List[CustomerOrder]:
@@ -471,7 +648,7 @@ class Mutation:
         units_on_order: int,
         reorder_level: int,
         discontinued: bool
-    ) -> Optional[Product]:
+    ) -> Optional[ProductType]:
         product = ProductDao.create_product(
             name,
             description,
@@ -510,7 +687,7 @@ class Mutation:
         units_on_order: Optional[int] = None,
         reorder_level: Optional[int] = None,
         discontinued: Optional[bool] = None
-    ) -> Optional[Product]:
+    ) -> Optional[ProductType]:
         product = ProductDao.update_product(
             product_id,
             name,
@@ -654,35 +831,22 @@ class Mutation:
 
 
     @strawberry.mutation
-    def create_customer_order(self, input: CustomerOrderInput) -> Optional[CustomerOrder]:
+    def create_customer_order(self, input: CustomerOrderInput) -> CustomerOrder:
         customer_id = input.customer_id
-        order_date = date.today()  # Get today's date
-        shipping_address = input.shipping_address
         quantity = input.quantity
         product_id = input.product_id
 
-        # Calculate total_amount based on quantity and product unit price
-        product = Product.query.get(product_id)
-        total_amount = quantity * product.UnitPrice
-
         # Create the customer order and return the result
-        return CustomerOrderDAO.create_customer_order(
-            customer_id,
-            order_date,
-            shipping_address,
-            quantity,
-            total_amount,
-            product_id
-        )
+        return CustomerOrderDAO.create_customer_order(customer_id, quantity, product_id)
+
     @strawberry.mutation
-    def update_customer_order(self, order_id: int, input: CustomerOrderInput) -> Optional[CustomerOrder]:
+    def update_customer_order(self, order_id: int, input: CustomerOrderInput) -> CustomerOrder:
         customer_id = input.customer_id
-        shipping_address = input.shipping_address
         quantity = input.quantity
         product_id = input.product_id
 
         # Update the customer order and return the result
-        return CustomerOrderDAO.update_customer_order(order_id, customer_id, shipping_address, quantity, product_id)
+        return CustomerOrderDAO.update_customer_order(order_id, customer_id, quantity, product_id)
 
     @strawberry.mutation
     def delete_customer_order(self, order_id: int) -> bool:

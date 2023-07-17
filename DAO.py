@@ -22,7 +22,7 @@ class SupplierDao:
     
     @staticmethod
     def get_suppliers_by_name(supplier_name: str) -> List[Supplier]:
-        suppliers = Supplier.query.filter(Supplier.SupplierName == supplier_name).all()
+        suppliers = Supplier.query.filter_by(Supplier.SupplierName == supplier_name).all()
         return suppliers
     @staticmethod
     def get_supplier_by_id(supplier_id):
@@ -108,8 +108,16 @@ class CategoryDao:
     def get_category_name_by_id(category_id: int) -> Optional[str]:
         category = CategoryDao.get_category_by_id(category_id)
         if category:
-            return category.CategoryName  # Update attribute name from category_name to CategoryName
+            return category.CategoryName 
         return None
+    
+    @staticmethod
+    def get_products_and_suppliers_by_category(category_id: int):
+        products_and_suppliers = db.session.query(Product, Supplier).\
+            join(Supplier, Product.CategoryID == Supplier.CategoryID).\
+            filter(Product.CategoryID == category_id).all()
+
+        return products_and_suppliers
 
 
 
@@ -376,6 +384,10 @@ class CustomerDao:
             if membership:
                 customer.membership_type = membership.membership_type
         return customer
+    
+    @staticmethod
+    def get_customers_by_email(email: str) -> List[Customer]:
+        return db.session.query(Customer).filter(Customer.Email == email).all()
 
     @staticmethod
     def get_all_customers():
@@ -416,48 +428,60 @@ class CustomerDao:
     
 class CustomerOrderDAO:
     @staticmethod
-    def create_customer_order(customer_id, order_date, shipping_address, quantity, total_amount, product_id):
-        # Get today's date if not provided
-        if not order_date:
-            order_date = date.today()
+    def create_customer_order(customer_id, quantity, product_id):
+        # Get today's date
+        order_date = date.today()
 
-        # Retrieve the product details
+        # Calculate the total amount based on the quantity and product unit price
         product = Product.query.get(product_id)
-        if not product:
-            return None
+        total_amount = quantity * product.UnitPrice
 
-        # Calculate the total amount if not provided
-        if total_amount is None:
-            total_amount = quantity * product.UnitPrice
-
+        # Create the customer order
         new_order = CustomerOrder(
-            CustomerID=customer_id,
+            customer_id=customer_id,
             OrderDate=order_date,
-            ShippingAddress=shipping_address,
+            ShippingAddress='',
             Quantity=quantity,
             TotalAmount=total_amount,
+            Discount=0.0,
             ProductID=product_id
         )
+
+        # Add the new order to the database
         db.session.add(new_order)
         db.session.commit()
 
-        # Calculate discount and update total amount
-        new_order.calculate_total_amount()
+        return new_order
 
-        # Decrement UnitsInStock for the product
-        product.UnitsInStock -= quantity
+    @staticmethod
+    def update_customer_order(order_id, customer_id, quantity, product_id):
+        # Retrieve the existing customer order
+        order = CustomerOrder.query.get(order_id)
 
-        # Create the outbound bill for this order
-        outbound_bill = OutboundBill(
-            CustomerOrderID=new_order.OrderID,
-            BillDate=new_order.OrderDate,
-            AmountPaid=0.0,  # Initially set to 0.0, as no payment is made yet
-            PaymentStatus="Pending"  # Initially set to "Pending"
-        )
-        db.session.add(outbound_bill)
+        # Update the customer order with the new values
+        order.customer_id = customer_id
+        order.quantity = quantity
+        order.product_id = product_id
+
+        # Calculate the new total amount based on the updated quantity and product unit price
+        product = Product.query.get(product_id)
+        order.total_amount = quantity * product.UnitPrice
+
+        # Commit the changes to the database
         db.session.commit()
 
-        return new_order
+        return order
+
+    @staticmethod
+    def delete_customer_order(order_id):
+        # Retrieve the customer order to be deleted
+        order = CustomerOrder.query.get(order_id)
+
+        # Delete the customer order from the database
+        db.session.delete(order)
+        db.session.commit()
+
+        return True
 
     @staticmethod
     def get_customer_order_by_id(order_id):
