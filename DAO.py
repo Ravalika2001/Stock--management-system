@@ -417,6 +417,19 @@ class CustomerDao:
 class CustomerOrderDAO:
     @staticmethod
     def create_customer_order(customer_id, order_date, shipping_address, quantity, total_amount, product_id):
+        # Get today's date if not provided
+        if not order_date:
+            order_date = date.today()
+
+        # Retrieve the product details
+        product = Product.query.get(product_id)
+        if not product:
+            return None
+
+        # Calculate the total amount if not provided
+        if total_amount is None:
+            total_amount = quantity * product.UnitPrice
+
         new_order = CustomerOrder(
             CustomerID=customer_id,
             OrderDate=order_date,
@@ -432,7 +445,6 @@ class CustomerOrderDAO:
         new_order.calculate_total_amount()
 
         # Decrement UnitsInStock for the product
-        product = Product.query.get(product_id)
         product.UnitsInStock -= quantity
 
         # Create the outbound bill for this order

@@ -112,6 +112,13 @@ class CustomerOrder:
     total_amount: float
     discount: float
     product_id: int
+@strawberry.input
+class CustomerOrderInput:
+    customer_id: int
+    shipping_address: str
+    quantity: int
+    product_id: int
+
 
 @strawberry.type
 class OutboundBill:
@@ -327,6 +334,20 @@ class Query:
             for customer in customers
         ]
 
+    def get_customer_order_by_id(order_id: int) -> Optional[CustomerOrder]:
+        return CustomerOrderDAO.get_customer_order_by_id(order_id)
+
+    @strawberry.field
+    def get_all_customer_orders() -> List[CustomerOrder]:
+        return CustomerOrderDAO.get_all_customer_orders()
+
+    @strawberry.field
+    def get_outbound_bill_by_id(bill_id: int) -> Optional[OutboundBill]:
+        return OutboundBillDAO.get_outbound_bill_by_id(bill_id)
+
+    @strawberry.field
+    def get_outbound_bills_by_customer_order_id(customer_order_id: int) -> List[OutboundBill]:
+        return OutboundBillDAO.get_outbound_bills_by_customer_order_id(customer_order_id)
 
 
 
@@ -594,7 +615,7 @@ class Mutation:
         contact_number: Optional[str] = None,
         email: Optional[str] = None,
         membership_id: Optional[int] = None,
-    ) -> Optional[CustomerType]:
+        ) -> Optional[CustomerType]:
         customer = CustomerDao.get_customer_by_id(customer_id)
         if not customer:
             return None
@@ -628,6 +649,78 @@ class Mutation:
     @strawberry.mutation
     def delete_customer(self, customer_id: int) -> bool:
         return CustomerDao.delete_customer(customer_id)
+    
+
+
+
+    @strawberry.mutation
+    def create_customer_order(self, input: CustomerOrderInput) -> Optional[CustomerOrder]:
+        customer_id = input.customer_id
+        order_date = date.today()  # Get today's date
+        shipping_address = input.shipping_address
+        quantity = input.quantity
+        product_id = input.product_id
+
+        # Calculate total_amount based on quantity and product unit price
+        product = Product.query.get(product_id)
+        total_amount = quantity * product.UnitPrice
+
+        # Create the customer order and return the result
+        return CustomerOrderDAO.create_customer_order(
+            customer_id,
+            order_date,
+            shipping_address,
+            quantity,
+            total_amount,
+            product_id
+        )
+    @strawberry.mutation
+    def update_customer_order(self, order_id: int, input: CustomerOrderInput) -> Optional[CustomerOrder]:
+        customer_id = input.customer_id
+        shipping_address = input.shipping_address
+        quantity = input.quantity
+        product_id = input.product_id
+
+        # Update the customer order and return the result
+        return CustomerOrderDAO.update_customer_order(order_id, customer_id, shipping_address, quantity, product_id)
+
+    @strawberry.mutation
+    def delete_customer_order(self, order_id: int) -> bool:
+        # Delete the customer order and return the result
+        return CustomerOrderDAO.delete_customer_order(order_id)
+
+    @strawberry.mutation
+    def create_outbound_bill(
+        self,
+        customer_order_id: int,
+        bill_date: date,
+        amount_paid: float,
+        payment_status: str,
+    ) -> Optional[OutboundBill]:
+        outbound_bill = OutboundBillDAO.create_outbound_bill(
+            customer_order_id,
+            bill_date,
+            amount_paid,
+            payment_status,
+        )
+
+        return outbound_bill
+
+    @strawberry.mutation
+    def update_outbound_bill(
+        self,
+        outbound_bill_id: int,
+        amount_paid: float,
+        payment_status: str,
+    ) -> Optional[OutboundBill]:
+        updated_bill = OutboundBillDAO.update_outbound_bill(outbound_bill_id, amount_paid, payment_status)
+
+        return updated_bill
+
+    @strawberry.mutation
+    def delete_outbound_bill(self, outbound_bill_id: int) -> bool:
+        return OutboundBillDAO.delete_outbound_bill(outbound_bill_id)
+
 
     
 schema = strawberry.Schema(query=Query, mutation=Mutation)
