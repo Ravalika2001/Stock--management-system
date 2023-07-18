@@ -1,562 +1,780 @@
-from typing import Optional,List
-from sqlalchemy.orm import joinedload
-from models import *
 import re
-from datetime import date, timedelta
+from typing import List, Optional
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
+from models import *
+from datetime import date
 
-class SupplierDao:
+
+class SupplierDAO:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create_supplier(self, name: str, contact_number: str) -> Supplier:
+        supplier = Supplier(name=name, contact_number=contact_number)
+        self.session.add(supplier)
+        self.session.commit()
+        return supplier
+
+    def get_supplier_by_id(self, supplier_id: int) -> Optional[Supplier]:
+        return self.session.query(Supplier).get(supplier_id)
+
     
-    @staticmethod
-    def create_supplier(name, address, contact, contact_number, email, category_id):
-        supplier = Supplier(
-            SupplierName=name,
-            Address=address,
-            ContactPerson=contact,
-            ContactNumber=contact_number,
-            Email=email,
-            CategoryID=category_id
+    def get_all_suppliers(self) -> List[Supplier]:
+        return self.session.query(Supplier).all()
+    
+    def get_products_by_supplier_name(self, supplier_name: str) -> List[Product]:
+        return (
+            self.session.query(Product)
+            .join(SupplierOrderItem, SupplierOrderItem.product_id == Product.id)
+            .join(SupplierOrder, SupplierOrder.id == SupplierOrderItem.supplier_order_id)
+            .join(Supplier, Supplier.id == SupplierOrder.supplier_id)
+            .filter(Supplier.name == supplier_name)
+            .all()
         )
-        db.session.add(supplier)
-        db.session.commit()
-        return supplier
     
-    @staticmethod
-    def get_suppliers_by_name(supplier_name: str) -> List[Supplier]:
-        suppliers = Supplier.query.filter_by(Supplier.SupplierName == supplier_name).all()
-        return suppliers
-    @staticmethod
-    def get_supplier_by_id(supplier_id):
-        supplier = Supplier.query.filter_by(SupplierID=supplier_id).first()
+
+    def update_supplier(self, supplier_id: int, name: Optional[str] = None, contact_number: Optional[str] = None) -> Optional[Supplier]:
+        supplier = self.session.query(Supplier).get(supplier_id)
         if supplier:
-            category = CategoryDao.get_category_by_id(supplier.category_id)
-            if category:
-                supplier.category_name = category.CategoryName
-        return supplier
-
-    @staticmethod
-    def get_all_suppliers():
-        suppliers = Supplier.query.all()
-        for supplier in suppliers:
-            category = CategoryDao.get_category_by_id(supplier.category_id)
-            if category:
-                supplier.category_name = category.CategoryName
-        return suppliers
-
-    @staticmethod
-    def update_supplier(supplier_id, supplier_name, contact_person, contact_number, email, address):
-        supplier = SupplierDao.get_supplier_by_id(supplier_id)
-        supplier.SupplierName = supplier_name
-        supplier.ContactPerson = contact_person
-        supplier.ContactNumber = contact_number
-        supplier.Email = email
-        supplier.Address = address
-        db.session.commit()
-        return supplier
-
-    @staticmethod
-    def delete_supplier(supplier_id):
-        supplier = SupplierDao.get_supplier_by_id(supplier_id)
-        db.session.delete(supplier)
-        db.session.commit()
-
-    @staticmethod
-    def is_valid_email(email):
-        email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        return re.match(email_regex, email)
-
-    @staticmethod
-    def is_valid_contact_number(contact_number):
-        contact_number_regex = r"^\d{10}$"
-        return re.match(contact_number_regex, contact_number)
-    
-class CategoryDao:
-    @staticmethod
-    def create_category(category_name):
-        category = Category(CategoryName=category_name)
-        db.session.add(category)
-        db.session.commit()
-        return category
-
-    @staticmethod
-    def get_category_by_id(category_id):
-        category = Category.query.filter_by(CategoryID=category_id).first()
-        return category
-
-    @staticmethod
-    def get_all_categories():
-        categories = Category.query.all()
-        return categories
-
-    @staticmethod
-    def update_category(category_id, category_name):
-        category = CategoryDao.get_category_by_id(category_id)
-        category.CategoryName = category_name
-        db.session.commit()
-        return category
-
-    @staticmethod
-    def delete_category(category_id):
-        category = CategoryDao.get_category_by_id(category_id)
-        db.session.delete(category)
-        db.session.commit()
-
-    @staticmethod
-    def get_category_by_id(category_id: int) -> Optional[Category]:
-        return Category.query.filter_by(CategoryID=category_id).first()
-
-    @staticmethod
-    def get_category_name_by_id(category_id: int) -> Optional[str]:
-        category = CategoryDao.get_category_by_id(category_id)
-        if category:
-            return category.CategoryName 
+            if name:
+                supplier.name = name
+            if contact_number:
+                supplier.contact_number = contact_number
+            self.session.commit()
+            return supplier
         return None
-    
-    @staticmethod
-    def get_products_and_suppliers_by_category(category_id: int):
-        products_and_suppliers = db.session.query(Product, Supplier).\
-            join(Supplier, Product.CategoryID == Supplier.CategoryID).\
-            filter(Product.CategoryID == category_id).all()
 
-        return products_and_suppliers
+    def delete_supplier(self, supplier_id: int) -> bool:
+        supplier = self.session.query(Supplier).get(supplier_id)
+        if supplier:
+            self.session.delete(supplier)
+            self.session.commit()
+            return True
+        return False
 
-
-
-# ==============================================
-
-
-
-class ProductDao:
-    @staticmethod
-    def create_product(
-        name: str,
-        description: str,
-        category_id: int,
-        unit_price: float,
-        units_in_stock: int,
-        units_on_order: int,
-        reorder_level: int,
-        discontinued: bool
-    ) -> Product:
-        try:
-            product = Product(
-                ProductName=name,
-                ProductDescription=description,
-                CategoryID=category_id,
-                UnitPrice=unit_price,
-                UnitsInStock=units_in_stock,
-                UnitsOnOrder=units_on_order,
-                ReorderLevel=reorder_level,
-                Discontinued=discontinued
+    def get_supplier_products(self, supplier_id: int) -> List[Product]:
+        supplier = self.session.query(Supplier).get(supplier_id)
+        if supplier:
+            products = (
+            self.session.query(Product)
+            .join(SupplierOrderItem, Product.id==SupplierOrderItem.product_id)
+            .join(SupplierOrder)
+            .filter(SupplierOrder.supplier_id == supplier_id)
+            .all()
             )
-            db.session.add(product)
-            db.session.commit()
-            return product
-        except Exception as e:
-            print("An error occurred while creating the product:", str(e))
-            db.session.rollback()
-            return None
+        
+            return products
+    
+    def get_supplier_by_name(self, supplier_name: str) -> List[Supplier]:
+        suppliers = (
+            self.session.query(Supplier)
+            .filter(Supplier.name == supplier_name)
+            .all()
+        )
 
-    @staticmethod
-    def get_product_by_id(product_id: int) -> Product:
-        return Product.query.filter_by(ProductID=product_id).first()
+        return suppliers
+    
+    def get_suppliers_by_category_id(self, category_id: int) -> List[Supplier]:
+        suppliers = (
+            self.session.query(Supplier)
+            .join(SupplierOrder, Supplier.id == SupplierOrder.supplier_id)
+            .join(SupplierOrderItem, SupplierOrderItem.supplier_order_id == SupplierOrder.id)
+            .join(Product, Product.id == SupplierOrderItem.product_id)
+            .join(Category, Category.product_id == Product.id)
+            .filter(Category.id == category_id)
+            .all()
+        )
+        return suppliers
+    
+    def get_products_by_supplier_id(self, supplier_id: int) -> List[Product]:
+        products = (
+            self.session.query(Product)
+            .join(SupplierOrderItem, SupplierOrderItem.product_id == Product.id)
+            .join(SupplierOrder, SupplierOrder.id == SupplierOrderItem.supplier_order_id)
+            .join(Supplier, Supplier.id == SupplierOrder.supplier_id)
+            .filter(Supplier.id == supplier_id)
+            .all()
+        )
+        return products
+    
+#================================================================================================================================   
 
-    @staticmethod
-    def get_all_products():
-        return Product.query.all()
+class ProductDAO:
+    def __init__(self, session: Session):
+        self.session = session
 
-    @staticmethod
-    def update_product(
-        product_id: int,
-        name: str = None,
-        description: str = None,
-        category_id: int = None,
-        unit_price: float = None,
-        units_in_stock: int = None,
-        units_on_order: int = None,
-        reorder_level: int = None,
-        discontinued: bool = None
-    ) -> Product:
-        product = ProductDao.get_product_by_id(product_id)
-        if not product:
-            return None
-
-        if name is not None:
-            product.ProductName = name
-        if description is not None:
-            product.ProductDescription = description
-        if category_id is not None:
-            product.CategoryID = category_id
-        if unit_price is not None:
-            product.UnitPrice = unit_price
-        if units_in_stock is not None:
-            product.UnitsInStock = units_in_stock
-        if units_on_order is not None:
-            product.UnitsOnOrder = units_on_order
-        if reorder_level is not None:
-            product.ReorderLevel = reorder_level
-        if discontinued is not None:
-            product.Discontinued = discontinued
-
-        db.session.commit()
-
+    def create_product(self, name: str, unit_price: float, description: str, category_id: int) -> Product:
+        product = Product(name=name, unit_price=unit_price, description=description, category_id=category_id)
+        self.session.add(product)
+        self.session.commit()
         return product
 
-    @staticmethod
-    def delete_product(product_id: int) -> bool:
-        product = ProductDao.get_product_by_id(product_id)
-        if not product:
-            return False
+    def get_product_by_id(self, product_id: int) -> Optional[Product]:
+        return self.session.query(Product).get(product_id)
 
-        db.session.delete(product)
-        db.session.commit()
-
-        return True
-
-class MembershipDAO:
-    @staticmethod
-    def get_membership_by_id(membership_id):
-        return Membership.query.get(membership_id)
-
-    @staticmethod
-    def get_all_memberships():
-        return Membership.query.all()
+    def get_products_by_category(self, category_id: int) -> List[Product]:
+        return self.session.query(Product).filter_by(category_id=category_id).all()
     
+    def get_products_by_category_name(self, category_name: str) -> List[Product]:
+        return (
+                self.session.query(Product)
+                .filter(Category.category_name == category_name)
+                .all())
 
-class SupplierOrderDAO:
-
-        @staticmethod
-        def get_supplier_order(order_id):
-            return SupplierOrder.query.get(order_id)
-
-        @staticmethod
-        def get_all_supplier_orders():
-            return SupplierOrder.query.all()
-        
-        @staticmethod
-        def get_supplier_order_by_id(order_id: int) -> Optional[SupplierOrder]:
-            supplier_order = SupplierOrder.query.get(order_id)
-            return supplier_order
-
-        @staticmethod
-        def get_supplier_name_by_order_id(order_id: int) -> Optional[str]:
-            supplier_order = SupplierOrder.query.options(joinedload(SupplierOrder.supplier)).get(order_id)
-            if supplier_order and supplier_order.supplier:
-                return supplier_order.supplier.SupplierName
-            return None
-
-        @staticmethod
-        def get_product_name_by_order_id(order_id: int) -> Optional[str]:
-            supplier_order = SupplierOrder.query.options(joinedload(SupplierOrder.product)).get(order_id)
-            if supplier_order and supplier_order.product:
-                return supplier_order.product.ProductName
-            return None
-
-        @staticmethod
-        def create_supplier_order(supplier_id, quantity, product_id):
-            # Get today's date
-            order_date = date.today()
-
-            # Calculate the expected delivery date as order date plus 5 days
-            expected_delivery_date = order_date + timedelta(days=5)
-
-            # Create a new SupplierOrder object
-            new_order = SupplierOrder(
-                SupplierID=supplier_id,
-                OrderDate=order_date,
-                ExpectedDeliveryDate=expected_delivery_date,
-                TotalAmount=0.0,  # TotalAmount will be calculated based on quantity and product unit price
-                Quantity=quantity,
-                ProductID=product_id
-            )
-
-            # Increment UnitsInStock for the product
-            product = Product.query.get(product_id)
-            product.UnitsInStock += quantity
-
-            # Calculate the total amount based on quantity and product unit price
-            new_order.TotalAmount = product.UnitPrice * quantity
-
-            # Create the inbound bill for this order
-            inbound_bill = InboundBill(
-                SupplierOrderID=new_order.OrderID,
-                BillDate=new_order.OrderDate,
-                DueDate=new_order.ExpectedDeliveryDate + timedelta(days=5),  # Example: Due date is set to 5 days from the expected delivery date
-                AmountDue=new_order.TotalAmount,
-                AmountPaid=0.0,  # Initially set to 0.0, as no payment is made yet
-                PaymentStatus="Pending"  # Initially set to "Pending"
-            )
-
-            # Set the relationship between the supplier order and inbound bill
-            new_order.inbound_bills.append(inbound_bill)
-
-            # Add the new order and inbound bill to the database session and commit the transaction
-            db.session.add(new_order)
-            db.session.commit()
-
-            # Return the newly created supplier order object
-            return new_order
-
-            
-        @staticmethod
-        def update_supplier_order(order_id, quantity):
-            order = SupplierOrder.query.get(order_id)
-            order.Quantity = quantity
-
-            # Update UnitsInStock for the product
-            product = Product.query.get(order.ProductID)
-            product.UnitsInStock -= order.Quantity  # Decrement previous quantity
-            product.UnitsInStock += quantity  # Increment new quantity
-
-            db.session.commit()
-
-            return order
-
-        @staticmethod
-        def delete_supplier_order(order_id):
-            order = SupplierOrder.query.get(order_id)
-            product = Product.query.get(order.ProductID)
-
-            # Decrement UnitsInStock for the product
-            product.UnitsInStock -= order.Quantity
-
-            db.session.delete(order)
-            db.session.commit()
-
-            return True
-        
-class InboundBillDAO:
-
-    @staticmethod
-    def get_inbound_bill(inbound_bill_id: int) -> Optional[InboundBill]:
-        return InboundBill.query.get(inbound_bill_id)
-
-    @staticmethod
-    def get_all_inbound_bills() -> List[InboundBill]:
-        return InboundBill.query.all()
-
-    @staticmethod
-    def update_inbound_bill_amount_paid(inbound_bill_id, amount_paid):
-        # Retrieve the inbound bill from the database
-        inbound_bill = InboundBill.query.get(inbound_bill_id)
-
-        # Update the amount paid
-        inbound_bill.AmountPaid = amount_paid
-
-        # Decrement the amount due by the amount paid
-        inbound_bill.AmountDue -= amount_paid
-
-        # Check if the amount due is zero
-        if inbound_bill.AmountDue == 0:
-            # Set the payment status to "Success"
-            inbound_bill.PaymentStatus = "Success"
-
-        # Commit the changes to the database
-        db.session.commit()
-
-        # Return the updated inbound bill
-        return inbound_bill
-    
-class CustomerDao:
-    @staticmethod
-    def create_customer(name, address, contact_person, contact_number, email, membership_id):
-        customer = Customer(
-            CustomerName=name,
-            Address=address,
-            ContactPerson=contact_person,
-            ContactNumber=contact_number,
-            Email=email,
-            membership_id=membership_id
+    def get_products_by_supplierorder_date(self, supplier_order_date: str) -> List[Product]:
+        return (
+            self.session.query(Product)
+            .join(SupplierOrderItem, Product.id == SupplierOrderItem.product_id)
+            .join(SupplierOrder, SupplierOrderItem.supplier_order_id == SupplierOrder.id)
+            .filter(SupplierOrder.order_date == supplier_order_date)
+            .all()
         )
-        db.session.add(customer)
-        db.session.commit()
-        return customer
-
-    @staticmethod
-    def get_customers_by_name(customer_name: str) -> List[Customer]:
-        customers = Customer.query.filter(Customer.CustomerName == customer_name).all()
-        return customers
-
-    @staticmethod
-    def get_customer_by_id(customer_id):
-        customer = Customer.query.filter_by(CustomerID=customer_id).first()
-        if customer:
-            membership = MembershipDAO.get_membership_by_id(customer.membership_id)
-            if membership:
-                customer.membership_type = membership.membership_type
-        return customer
-    
-    @staticmethod
-    def get_customers_by_email(email: str) -> List[Customer]:
-        return db.session.query(Customer).filter(Customer.Email == email).all()
-
-    @staticmethod
-    def get_all_customers():
-        customers = Customer.query.all()
-        for customer in customers:
-            membership = MembershipDAO.get_membership_by_id(customer.membership_id)
-            if membership:
-                customer.membership_type = membership.membership_type
-        return customers
-
-    @staticmethod
-    def update_customer(customer_id, customer_name, contact_person, contact_number, email, address):
-        customer = CustomerDao.get_customer_by_id(customer_id)
-        customer.CustomerName = customer_name
-        customer.ContactPerson = contact_person
-        customer.ContactNumber = contact_number
-        customer.Email = email
-        customer.Address = address
-        db.session.commit()
-        return customer
-
-    @staticmethod
-    def delete_customer(customer_id):
-        customer = CustomerDao.get_customer_by_id(customer_id)
-        db.session.delete(customer)
-        db.session.commit()
-
-    @staticmethod
-    def is_valid_email(email):
-        email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        return re.match(email_regex, email)
-
-    @staticmethod
-    def is_valid_contact_number(contact_number):
-        contact_number_regex = r"^\d{10}$"
-        return re.match(contact_number_regex, contact_number)
-
-    
-class CustomerOrderDAO:
-    @staticmethod
-    def create_customer_order(customer_id, quantity, product_id):
-        # Get today's date
-        order_date = date.today()
-
-        # Calculate the total amount based on the quantity and product unit price
-        product = Product.query.get(product_id)
-        total_amount = quantity * product.UnitPrice
-
-        # Create the customer order
-        new_order = CustomerOrder(
-            customer_id=customer_id,
-            OrderDate=order_date,
-            ShippingAddress='',
-            Quantity=quantity,
-            TotalAmount=total_amount,
-            Discount=0.0,
-            ProductID=product_id
+    def get_supplier_by_productid(self, product_id: int) -> Optional[Supplier]:
+        supplier = (
+            self.session.query(Supplier)
+            .join(SupplierOrder, Supplier.id == SupplierOrder.supplier_id)
+            .join(SupplierOrderItem, SupplierOrderItem.supplier_order_id == SupplierOrder.id)
+            .join(Product, Product.id == SupplierOrderItem.product_id)
+            .filter(Product.id == product_id)
+            .first()
         )
+        return supplier
+    
+    def get_products_by_supplier_id(self, supplier_id: int) -> List[Product]:
+        products = (
+            self.session.query(Product)
+            .join(SupplierOrderItem, SupplierOrderItem.product_id == Product.id)
+            .join(SupplierOrder, SupplierOrder.id == SupplierOrderItem.supplier_order_id)
+            .join(Supplier, Supplier.id == SupplierOrder.supplier_id)
+            .filter(Supplier.id == supplier_id)
+            .all()
+        )
+        return products
 
-        # Add the new order to the database
-        db.session.add(new_order)
-        db.session.commit()
+    
+    def get_all_products(self) -> List[Product]:
+        return self.session.query(Product).all()
 
-        return new_order
-
-    @staticmethod
-    def update_customer_order(order_id, customer_id, quantity, product_id):
-        # Retrieve the existing customer order
-        order = CustomerOrder.query.get(order_id)
-
-        # Update the customer order with the new values
-        order.customer_id = customer_id
-        order.quantity = quantity
-        order.product_id = product_id
-
-        # Calculate the new total amount based on the updated quantity and product unit price
-        product = Product.query.get(product_id)
-        order.total_amount = quantity * product.UnitPrice
-
-        # Commit the changes to the database
-        db.session.commit()
-
-        return order
-
-    @staticmethod
-    def delete_customer_order(order_id):
-        # Retrieve the customer order to be deleted
-        order = CustomerOrder.query.get(order_id)
-
-        # Delete the customer order from the database
-        db.session.delete(order)
-        db.session.commit()
-
-        return True
-
-    @staticmethod
-    def get_customer_order_by_id(order_id):
-        return CustomerOrder.query.get(order_id)
-
-    @staticmethod
-    def update_customer_order(order_id, shipping_address, quantity):
-        order = CustomerOrder.query.get(order_id)
-        if order:
-            # Update the order details
-            order.ShippingAddress = shipping_address
-            order.Quantity = quantity
-            db.session.commit()
-            return order
+    def update_product(self, product_id: int, name: Optional[str] = None, unit_price: Optional[float] = None,
+                       description: Optional[str] = None) -> Optional[Product]:
+        product = self.session.query(Product).get(product_id)
+        if product:
+            if name:
+                product.name = name
+            if unit_price:
+                product.unit_price = unit_price
+            if description:
+                product.description = description
+            self.session.commit()
+            return product
         return None
 
-    @staticmethod
-    def delete_customer_order(order_id):
-        order = CustomerOrder.query.get(order_id)
-        if order:
-            # Delete the order
-            db.session.delete(order)
-            db.session.commit()
+    def delete_product(self, product_id: int) -> bool:
+        product = self.session.query(Product).get(product_id)
+        if product:
+            self.session.delete(product)
+            self.session.commit()
             return True
         return False
+    
+    def get_product_by_name(self, product_name: str) -> Optional[Product]:
+        product = (
+            self.session.query(Product)
+            .filter(func.lower(Product.name) == func.lower(product_name))
+            .first()
+        )
+        
+        return product
+    
+    def get_suppliers_by_product_name(self, product_name: str) -> List[Supplier]:
+        suppliers = (
+            self.session.query(Supplier)
+            .join(SupplierOrder, Supplier.id == SupplierOrder.supplier_id)
+            .join(SupplierOrderItem, SupplierOrderItem.supplier_order_id == SupplierOrder.id)
+            .join(Product, Product.id == SupplierOrderItem.product_id)
+            .filter(Product.name == product_name)
+            .all()
+        )
+        
+        return suppliers
+    
+    def get_products_by_consumer_order_item(self, consumer_order_item_id: int) -> List[Product]:
+        products = (
+            self.session.query(Product)
+            .join(ConsumerOrderItem, Product.id == ConsumerOrderItem.product_id)
+            .filter(ConsumerOrderItem.id == consumer_order_item_id)
+            .all()
+        )
+        return products
+    
+    def get_products_by_supplier_order_item(self, supplier_order_item_id: int) -> List[Product]:
+        products = (
+             self.session.query(Product)
+            .join(SupplierOrderItem, Product.id == SupplierOrderItem.product_id)
+            .filter(SupplierOrderItem.id == supplier_order_item_id)
+            .all()
+        )
+        return products
+    
+    def get_category_by_product_id(self, product_id: int) -> Optional[Category]:
+        product = self.session.query(Product).get(product_id)
+        if product:
+            category = product.category
+            if category:
+                return category
+        return None
+    
+    def get_category_by_product_name(self, product_name: str) -> Optional[Category]:
+        product = self.session.query(Product).filter(Product.name == product_name).first()
+        if product:
+            category = product.category
+            if category:
+                return category
+        return None
+    
+# ================================================================================================================================================
 
-    @staticmethod
-    def get_all_customer_orders():
-        return CustomerOrder.query.all()
+
+class CategoryDAO:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create_category(self, category_name: str) -> Category:
+        category = Category(category_name=category_name)
+        self.session.add(category)
+        self.session.commit()
+        return category
     
 
-class OutboundBillDAO:
-    @staticmethod
-    def create_outbound_bill(customer_order_id, bill_date, amount_paid, payment_status):
-        outbound_bill = OutboundBill(
-            CustomerOrderID=customer_order_id,
-            BillDate=bill_date,
-            DueDate=bill_date + timedelta(days=2),
-            Discount=0.0,
-            AmountPaid=amount_paid,
-            PaymentStatus=payment_status
+
+    def get_category_by_id(self, category_id: int) -> Optional[Category]:
+        return self.session.query(Category).get(category_id)
+    
+    def get_all_categories(self) -> List[Category]:
+        return self.session.query(Category).all()
+
+    def update_category(self, category_id: int, category_name: str) -> Optional[Category]:
+        category = self.session.query(Category).get(category_id)
+        if category:
+            category.category_name = category_name
+            self.session.commit()
+            return category
+        return None
+
+    def delete_category(self, category_id: int) -> bool:
+        category = self.session.query(Category).get(category_id)
+        if category:
+            self.session.delete(category)
+            self.session.commit()
+            return True
+        return False
+    
+    def get_category_by_name(self, category_name: str) -> Optional[Category]:
+        category = (
+            self.session.query(Category)
+            .filter(func.lower(Category.category_name) == func.lower(category_name))
+            .first()
+        )
+        
+        return category
+
+    def get_category_by_supplierid(self, supplier_id: int) -> List[Category]:
+        categories = (
+            self.session.query(Category)
+            .join(Product, Category.product_id == Product.id)
+            .join(SupplierOrderItem, SupplierOrderItem.product_id == Product.id)
+            .join(SupplierOrder, SupplierOrder.id == SupplierOrderItem.supplier_order_id)
+            .join(Supplier, Supplier.id == SupplierOrder.supplier_id)
+            .filter(Supplier.id == supplier_id)
+            .all()
+        )
+        return categories
+
+ 
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+
+
+class SupplierOrderDAO:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create_supplier_order(self, supplier_id: int, order_date: str, total_amount: float) -> SupplierOrder:
+        supplier_order = SupplierOrder(supplier_id=supplier_id, order_date=order_date, total_amount=total_amount)
+        self.session.add(supplier_order)
+        self.session.commit()
+        return supplier_order
+
+    def get_supplier_order_by_id(self, supplier_order_id: int) -> Optional[SupplierOrder]:
+        return self.session.query(SupplierOrder).get(supplier_order_id)
+    
+    def get_all_supplier_orders(self) -> List[SupplierOrder]:
+        return self.session.query(SupplierOrder).all()
+
+    def update_supplier_order(self, supplier_order_id: int, order_date: Optional[str] = None,
+                              total_amount: Optional[float] = None) -> Optional[SupplierOrder]:
+        supplier_order = self.session.query(SupplierOrder).get(supplier_order_id)
+        if supplier_order:
+            if order_date:
+                supplier_order.order_date = order_date
+            if total_amount:
+                supplier_order.total_amount = total_amount
+            self.session.commit()
+            return supplier_order
+        return None
+
+    def delete_supplier_order(self, supplier_order_id: int) -> bool:
+        supplier_order = self.session.query(SupplierOrder).get(supplier_order_id)
+        if supplier_order:
+            self.session.delete(supplier_order)
+            self.session.commit()
+            return True
+        return False
+    
+    def get_suppliers_by_product_name(self, product_name: str) -> List[Supplier]:
+        suppliers = (
+            self.session.query(Supplier)
+            .join(SupplierOrder, Supplier.id == SupplierOrder.supplier_id)
+            .join(SupplierOrderItem, SupplierOrderItem.supplier_order_id == SupplierOrder.id)
+            .join(Product, Product.id == SupplierOrderItem.product_id)
+            .filter(Product.name == product_name)
+            .all()
+        )
+        
+        return suppliers
+    
+    def get_supplier_order_items_by_order_date(self, order_date: date) -> List[SupplierOrderItem]:
+        supplier_order_items = (
+            self.session.query(SupplierOrderItem)
+            .join(SupplierOrder, SupplierOrder.id == SupplierOrderItem.supplier_order_id)
+            .filter(SupplierOrder.order_date == order_date)
+            .all()
+        )
+        return supplier_order_items
+        
+    def get_supplier_orders_by_order_date(self, order_date: date) -> List[SupplierOrder]:
+        return self.session.query(SupplierOrder).filter(SupplierOrder.order_date == order_date).all()
+    
+    def get_products_by_supplier_order_id(self, supplier_order_id: int) -> List[Product]:
+        products = (
+            self.session.query(Product)
+            .join(SupplierOrderItem, Product.id == SupplierOrderItem.product_id)
+            .filter(SupplierOrderItem.supplier_order_id == supplier_order_id)
+            .all()
+        )
+        return products
+    
+    
+    
+    
+
+
+class SupplierOrderItemDAO:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create_supplier_order_item(
+        self,
+        supplier_order_id: int,
+        product_id: int,
+        item_name: str,
+        quantity: int,
+        unit_price: float,
+        calculate_total: bool = True,
+    ) -> SupplierOrderItem:
+        supplier_order_item = SupplierOrderItem(
+            supplier_order_id=supplier_order_id,
+            product_id=product_id,
+            item_name=item_name,
+            quantity=quantity,
+            unit_price=unit_price,
         )
 
-        db.session.add(outbound_bill)
-        db.session.commit()
+        if calculate_total:
+            supplier_order_item.calculate_total_price()
 
-        return outbound_bill
+        # Update the total_amount of the associated SupplierOrder
+        supplier_order = self.session.query(SupplierOrder).get(supplier_order_id)
+        if supplier_order:
+            if supplier_order_item.total_price is not None:
+                if supplier_order.total_amount is None:
+                    supplier_order.total_amount = 0  # Initialize to 0 if None
+                supplier_order.total_amount += supplier_order_item.total_price
 
-    @staticmethod
-    def get_outbound_bill_by_id(outbound_bill_id):
-        return OutboundBill.query.get(outbound_bill_id)
+        self.session.add(supplier_order_item)
+        self.session.commit()
 
-    @staticmethod
-    def update_outbound_bill(outbound_bill_id, amount_paid, payment_status):
-        outbound_bill = OutboundBill.query.get(outbound_bill_id)
+        return supplier_order_item
 
-        if outbound_bill:
-            outbound_bill.AmountPaid = amount_paid
-            outbound_bill.PaymentStatus = payment_status
+    def get_supplier_order_item_by_id(self, supplier_order_item_id: int) -> Optional[SupplierOrderItem]:
+        return self.session.query(SupplierOrderItem).get(supplier_order_item_id)
+    
+    
+    def get_all_supplier_order_items(self) -> List[SupplierOrderItem]:
+        return self.session.query(SupplierOrderItem).all()
 
-            db.session.commit()
+    def update_supplier_order_item(
+        self,
+        supplier_order_item_id: int,
+        item_name: Optional[str] = None,
+        quantity: Optional[int] = None,
+        unit_price: Optional[float] = None,
+        calculate_total: bool = True,
+    ) -> Optional[SupplierOrderItem]:
+        supplier_order_item = self.session.query(SupplierOrderItem).get(supplier_order_item_id)
+        if supplier_order_item:
+            if item_name is not None:
+                supplier_order_item.item_name = item_name
+            if quantity is not None:
+                supplier_order_item.quantity = quantity
+            if unit_price is not None:
+                supplier_order_item.unit_price = unit_price
 
-        return outbound_bill
+            if calculate_total:
+                supplier_order_item.calculate_total_price()
 
-    @staticmethod
-    def delete_outbound_bill(outbound_bill_id):
-        outbound_bill = OutboundBill.query.get(outbound_bill_id)
+            # Update the total_amount of the associated SupplierOrder
+            supplier_order = supplier_order_item.order
+            if supplier_order:
+                if supplier_order_item.total_price is not None:
+                    if supplier_order.total_amount is None:
+                        supplier_order.total_amount = 0  # Initialize to 0 if None
+                    supplier_order.total_amount += supplier_order_item.total_price
 
-        if outbound_bill:
-            db.session.delete(outbound_bill)
-            db.session.commit()
+            self.session.commit()
+            return supplier_order_item
+
+        return None
+
+    def delete_supplier_order_item(self, supplier_order_item_id: int) -> bool:
+        supplier_order_item = self.session.query(SupplierOrderItem).get(supplier_order_item_id)
+        if supplier_order_item:
+            self.session.delete(supplier_order_item)
+            self.session.commit()
             return True
-
         return False
     
-    @staticmethod
-    def get_outbound_bills_by_customer_order_id(customer_order_id):
-        return OutboundBill.query.filter_by(CustomerOrderID=customer_order_id).all()
+    
+
+
+class ConsumerOrderDAO:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create_consumer_order(
+        self,
+        consumer_id: int,
+        order_date: str,
+        total_amount: float,
+    ) -> ConsumerOrder:
+        consumer_order = ConsumerOrder(consumer_id=consumer_id, order_date=order_date, total_amount=total_amount)
+
+        self.session.add(consumer_order)
+        self.session.commit()
+        return consumer_order
+    
+    def get_consumer_orders_by_order_date(self, order_date: date) -> List[ConsumerOrder]:
+        return self.session.query(ConsumerOrder).filter(ConsumerOrder.order_date == order_date).all()
+
+    def get_consumer_order_by_id(self, consumer_order_id: int) -> Optional[ConsumerOrder]:
+        return self.session.query(ConsumerOrder).get(consumer_order_id)
+    
+    def get_consumers_by_product_name(self, product_name: str) -> List[Consumer]:
+        consumers = (
+            self.session.query(Consumer)
+            .join(ConsumerOrder, Consumer.id == ConsumerOrder.consumer_id)
+            .join(ConsumerOrderItem, ConsumerOrderItem.consumer_order_id == ConsumerOrder.id)
+            .join(Product, Product.id == ConsumerOrderItem.product_id)
+            .filter(Product.name == product_name)
+            .all()
+        )
+    
+        return consumers
+    
+    def get_all_consumer_orders(self) -> List[ConsumerOrder]:
+        return self.session.query(ConsumerOrder).all()
+
+    def update_consumer_order(
+        self,
+        consumer_order_id: int,
+        order_date: Optional[str] = None,
+        total_amount: Optional[float] = None,
+    ) -> Optional[ConsumerOrder]:
+        consumer_order = self.session.query(ConsumerOrder).get(consumer_order_id)
+
+        if consumer_order:
+            if order_date is not None:
+                consumer_order.order_date = order_date
+            if total_amount is not None:
+                consumer_order.total_amount = total_amount
+
+            self.session.commit()
+            return consumer_order
+
+        return None
+
+    def delete_consumer_order(self, consumer_order_id: int) -> bool:
+        consumer_order = self.session.query(ConsumerOrder).get(consumer_order_id)
+        if consumer_order:
+            self.session.delete(consumer_order)
+            self.session.commit()
+            return True
+        return False
+    
+    def get_products_by_consumer_order_date(self, order_date: date) -> List[Product]:
+        products = (
+            self.session.query(Product)
+            .join(ConsumerOrderItem, Product.id == ConsumerOrderItem.product_id)
+            .join(ConsumerOrder, ConsumerOrder.id == ConsumerOrderItem.consumer_order_id)
+            .filter(ConsumerOrder.order_date == order_date)
+            .all()
+        )
+        return products
+
+    def get_products_by_consumer_order_id(self, order_id: int) -> List[Product]:
+        products = (
+            self.session.query(Product)
+            .join(ConsumerOrderItem, Product.id == ConsumerOrderItem.product_id)
+            .filter(ConsumerOrderItem.consumer_order_id == order_id)
+            .all()
+        )
+        return products
+    
+    def get_products_by_consumer_order_id(self, consumer_order_id: int) -> List[Product]:
+        products = (
+            self.session.query(Product)
+            .join(ConsumerOrderItem, Product.id == ConsumerOrderItem.product_id)
+            .join(ConsumerOrder, ConsumerOrder.id == ConsumerOrderItem.consumer_order_id)
+            .filter(ConsumerOrder.id == consumer_order_id)
+            .all()
+        )
+        return products
+
+    def get_products_by_consumer_order_date(self, consumer_order_date: str) -> List[Product]:
+        products = (
+            self.session.query(Product)
+            .join(ConsumerOrderItem, Product.id == ConsumerOrderItem.product_id)
+            .join(ConsumerOrder, ConsumerOrder.id == ConsumerOrderItem.consumer_order_id)
+            .filter(ConsumerOrder.order_date == consumer_order_date)
+            .all()
+        )
+        return products
+
+# =======================================================================================================
+
+class ConsumerOrderItemDAO:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create_consumer_order_item(
+        self,
+        consumer_order_id: int,
+        product_id: int,
+        item_name: str,
+        quantity: int,
+        unit_price: float,
+        total_price: float = 0.0,
+    ) -> ConsumerOrderItem:
+        consumer_order_item = ConsumerOrderItem(
+            consumer_order_id=consumer_order_id,
+            product_id=product_id,
+            item_name=item_name,
+            quantity=quantity,
+            unit_price=unit_price,
+            total_price=total_price,
+        )
+        consumer_order_item.total_price = quantity*unit_price
+        self.session.add(consumer_order_item)
+
+        # Update the total_amount of the associated ConsumerOrder
+        consumer_order = consumer_order_item.order
+        if consumer_order:
+            consumer_order.total_amount += total_price
+
+        self.session.commit()
+
+        return consumer_order_item
+    
+    def get_consumer_order_items_by_order_date(self, order_date: date) -> List[ConsumerOrderItem]:
+        consumer_order_items = (
+            self.session.query(ConsumerOrderItem)
+            .join(ConsumerOrder, ConsumerOrder.id == ConsumerOrderItem.consumer_order_id)
+            .filter(ConsumerOrder.order_date == order_date)
+            .all()
+        )
+        return consumer_order_items
+
+    def get_consumer_order_item_by_id(self, consumer_order_item_id: int) -> Optional[ConsumerOrderItem]:
+        return self.session.query(ConsumerOrderItem).get(consumer_order_item_id)
+    
+    def get_all_consumer_order_items(self) -> List[ConsumerOrderItem]:
+        return self.session.query(ConsumerOrderItem).all()
+
+    def update_consumer_order_item(
+        self,
+        consumer_order_item_id: int,
+        item_name: Optional[str] = None,
+        quantity: Optional[int] = None,
+        unit_price: Optional[float] = None,
+        total_price: Optional[float] = None,
+    ) -> Optional[ConsumerOrderItem]:
+        consumer_order_item = self.session.query(ConsumerOrderItem).get(consumer_order_item_id)
+        if consumer_order_item:
+            if item_name is not None:
+                consumer_order_item.item_name = item_name
+            if quantity is not None:
+                consumer_order_item.quantity = quantity
+            if unit_price is not None:
+                consumer_order_item.unit_price = unit_price
+
+            if quantity is not None and unit_price is not None:
+                consumer_order_item.total_price = quantity * unit_price
+            elif total_price is not None:
+                consumer_order_item.total_price = total_price
+
+            # Update the total_amount of the associated ConsumerOrder
+            consumer_order = consumer_order_item.order
+            if consumer_order:
+                consumer_order.total_amount += consumer_order_item.total_price
+
+            self.session.commit()
+            return consumer_order_item
+
+        return None
+
+
+
+    def delete_consumer_order_item(self, consumer_order_item_id: int) -> bool:
+        consumer_order_item = self.session.query(ConsumerOrderItem).get(consumer_order_item_id)
+        if consumer_order_item:
+            self.session.delete(consumer_order_item)
+            self.session.commit()
+            return True
+        return False
+    
+    
+# =====================================================================================================================
+
+class ConsumerDAO:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create_consumer(self, name: str, contact_number: str) -> Consumer:
+        consumer = Consumer(name=name, contact_number=contact_number)
+        self.session.add(consumer)
+        self.session.commit()
+        return consumer
+
+
+    def get_consumer_by_id(self, consumer_id: int) -> Optional[Consumer]:
+        return self.session.query(Consumer).get(consumer_id)
+
+    def get_consumers_by_name(self, name: str) -> List[Consumer]:
+        pattern = re.compile(name, re.IGNORECASE)
+        return self.session.query(Consumer).filter(pattern.match(Consumer.name)).all()
+    
+    def get_all_consumers(self) -> List[Consumer]:
+        return self.session.query(Consumer).all()
+
+    def update_consumer(self, consumer_id: int, name: Optional[str] = None,
+                        contact_number: Optional[str] = None) -> Optional[Consumer]:
+        consumer = self.session.query(Consumer).get(consumer_id)
+        if consumer:
+            if name:
+                consumer.name = name
+            if contact_number:
+                consumer.contact_number = contact_number
+            self.session.commit()
+            return consumer
+        return None
+
+    def delete_consumer(self, consumer_id: int) -> bool:
+        consumer = self.session.query(Consumer).get(consumer_id)
+        if consumer:
+            self.session.delete(consumer)
+            self.session.commit()
+            return True
+        return False
+    
+    def get_consumer_by_membership_id(self, membership_id: int) -> Optional[Consumer]:
+        consumer = (
+            self.session.query(Consumer)
+            .join(ConsumerMembership, Consumer.id == ConsumerMembership.consumer_id)
+            .filter(ConsumerMembership.id == membership_id)
+            .first()
+        )
+        return consumer
+    
+    def get_products_by_consumer_id(self, consumer_id: int) -> List[Product]:
+        return (
+            self.session.query(Product)
+            .join(ConsumerOrderItem, ConsumerOrderItem.product_id == Product.id)
+            .join(ConsumerOrder, ConsumerOrder.id == ConsumerOrderItem.consumer_order_id)
+            .join(Consumer, Consumer.id == ConsumerOrder.consumer_id)
+            .filter(Consumer.id == consumer_id)
+            .all()
+        )
+
+    def get_products_by_consumer_name(self, consumer_name: str) -> List[Product]:
+        return (
+            self.session.query(Product)
+            .join(ConsumerOrderItem, ConsumerOrderItem.product_id == Product.id)
+            .join(ConsumerOrder, ConsumerOrder.id == ConsumerOrderItem.consumer_order_id)
+            .join(Consumer, Consumer.id == ConsumerOrder.consumer_id)
+            .filter(Consumer.name == consumer_name)
+            .all()
+        )
+    def get_consumers_by_name(self, consumer_name: str) -> List[Consumer]:
+        return self.session.query(Consumer).filter(Consumer.name == consumer_name).all()
+
+#================================================================================================================================== 
+class ConsumerMembershipDAO:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create_consumer_membership(self, consumer_id: int, start_date: str, end_date: str) -> ConsumerMembership:
+        consumer_membership = ConsumerMembership(consumer_id=consumer_id, start_date=start_date, end_date=end_date)
+        self.session.add(consumer_membership)
+        self.session.commit()
+        return consumer_membership
+
+    def get_consumer_membership_by_id(self, membership_id: int) -> Optional[ConsumerMembership]:
+        return self.session.query(ConsumerMembership).get(membership_id)
+
+    def get_all_consumer_memberships(self) -> List[ConsumerMembership]:
+        return self.session.query(ConsumerMembership).all()
+
+    def update_consumer_membership(
+        self,
+        membership_id: int,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Optional[ConsumerMembership]:
+        consumer_membership = self.session.query(ConsumerMembership).get(membership_id)
+        if consumer_membership:
+            if start_date:
+                consumer_membership.start_date = start_date
+            if end_date:
+                consumer_membership.end_date = end_date
+            self.session.commit()
+            return consumer_membership
+        return None
+
+    def delete_consumer_membership(self, membership_id: int) -> bool:
+        consumer_membership = self.session.query(ConsumerMembership).get(membership_id)
+        if consumer_membership:
+            self.session.delete(consumer_membership)
+            self.session.commit()
+            return True
+        return False
+    
+    
