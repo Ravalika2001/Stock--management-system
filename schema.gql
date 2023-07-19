@@ -1,0 +1,190 @@
+type ProductSchema {
+  id: Int!
+  category_id: Int!
+  name: String!
+  unit_price: Float!
+  description: String!
+}
+
+type SupplierSchema {
+  id: Int!
+  name: String!
+  contact_number: String!
+}
+
+type CategorySchema {
+  id: Int!
+  category_name: String!
+}
+
+type SupplierOrderSchema {
+  id: Int!
+  supplier_id: Int!
+  order_date: String!
+  total_amount: Float!
+}
+
+type SupplierOrderItemSchema {
+  id: Int!
+  supplier_order_id: Int!
+  product_id: Int!
+  item_name: String!
+  quantity: Int!
+  unit_price: Float!
+  total_price: Float
+}
+
+type ConsumerOrderSchema {
+  id: Int!
+  consumer_id: Int!
+  order_date: String!
+  total_amount: Float!
+}
+
+type ConsumerOrderItemSchema {
+  id: Int!
+  consumer_order_id: Int!
+  product_id: Int!
+  item_name: String!
+  quantity: Int!
+  unit_price: Float!
+  total_price: Float!
+}
+
+type ConsumerMembershipSchema {
+  id: Int!
+  consumer_id: Int!
+  start_date: String!
+  end_date: String
+}
+
+type ConsumerSchema {
+  id: Int!
+  name: String!
+  contact_number: String!
+}
+
+type MostSoldProductSchema {
+  product: ProductSchema
+  total_quantity: Int
+}
+
+type MostBoughtProductSchema {
+  product: ProductSchema
+  total_quantity: Int
+}
+
+type Query {
+  get_most_bought_product: MostBoughtProductSchema
+  get_most_sold_product: MostSoldProductSchema
+  get_supplier_by_id(supplier_id: Int!): SupplierSchema
+  get_all_suppliers: [SupplierSchema]
+  get_suppliers_by_product_name(product_name: String!): [SupplierSchema]
+  get_supplier_by_name(supplier_name: String!): [SupplierSchema]
+  get_product_by_id(product_id: Int!): ProductSchema
+  get_products_by_category(category_id: Int!): [ProductSchema]
+  get_all_products: [ProductSchema]
+  get_product_by_name(product_name: String!): ProductSchema
+  get_products_by_consumer_order_item(consumer_order_item_id: Int!): [ProductSchema]
+  get_category_by_id(category_id: Int!): CategorySchema
+  get_all_categories: [CategorySchema]
+  get_category_by_name(category_name: String!): CategorySchema
+  get_supplier_order_by_id(supplier_order_id: Int!): SupplierOrderSchema
+  get_supplier_order_item_by_id(supplier_order_item_id: Int!): SupplierOrderItemSchema
+  get_all_supplier_orders: [SupplierOrderSchema]
+  get_all_supplier_order_items: [SupplierOrderItemSchema]
+  get_consumer_order_by_id(consumer_order_id: Int!): ConsumerOrderSchema
+  get_all_consumer_orders: [ConsumerOrderSchema]
+  get_consumer_order_item_by_id(consumer_order_item_id: Int!): ConsumerOrderItemSchema
+  get_all_consumer_order_items: [ConsumerOrderItemSchema]
+  get_consumer_by_id(consumer_id: Int!): ConsumerSchema
+  get_consumers_by_name(name: String!): [ConsumerSchema]
+  get_all_consumers: [ConsumerSchema]
+  get_products_supplierid(supplier_id: Int!): [ProductSchema]
+  get_consumer_by_id(consumer_id: Int!): ConsumerSchema
+  get_products_by_category_name(category_name: String!): [ProductSchema]
+  get_consumer_by_membership_id(membership_id: Int!): ConsumerSchema
+  get_categories_by_supplier_id(supplier_id: Int!): [CategorySchema]
+  get_products_by_supplier_order_id(supplier_order_id: Int!): [ProductSchema]
+  getProductsBySupplierOrderDate(supplier_order_date: String!): [ProductSchema]
+  get_supplier_by_productid(product_id: Int!): SupplierSchema
+  products_by_date(order_date: String!): [ProductSchema]
+  products_by_id(order_id: Int!): [ProductSchema]
+  consumer_name(consumer_name: String!): [ConsumerSchema]
+  get_products_by_supplier_id(supplier_id: Int!): [ProductSchema]
+  get_category_by_product_id(product_id: Int!): CategorySchema
+  get_category_by_product_name(product_name: String!): CategorySchema
+  get_products_by_consumer_order_id(consumer_order_id: Int!): [ProductSchema]
+  get_products_by_consumer_order_date(consumer_order_date: String!): [ProductSchema]
+}
+
+
+type Mutation {
+  create_supplier(name: String!, contact_number: String!): SupplierSchema!
+  update_supplier(supplier_id: Int!, name: String, contact_number: String): SupplierSchema
+  delete_supplier(supplier_id: Int!): Boolean!
+
+  create_product(name: String!, unit_price: Float!, description: String!, category_id: Int!): ProductSchema!
+  update_product(product_id: Int!, name: String, unit_price: Float, description: String): ProductSchema
+  delete_product(product_id: Int!): Boolean!
+
+  create_category(category_name: String!): CategorySchema!
+  update_category(category_id: Int!, category_name: String!): CategorySchema
+  delete_category(category_id: Int!): Boolean!
+
+  create_supplier_order(supplier_id: Int!, order_date: String!, total_amount: Float!): SupplierOrderSchema!
+  update_supplier_order(supplier_order_id: Int!, order_date: String, total_amount: Float): SupplierOrderSchema
+  delete_supplier_order(supplier_order_id: Int!): Boolean!
+
+  create_supplier_order_item(
+    supplier_order_id: Int!
+    product_id: Int!
+    item_name: String!
+    quantity: Int!
+    unit_price: Float!
+    total_price: Float
+  ): SupplierOrderItemSchema!
+
+  update_supplier_order_item(
+    supplier_order_item_id: Int!
+    item_name: String
+    quantity: Int
+    unit_price: Float
+    total_price: Float
+  ): SupplierOrderItemSchema
+
+  delete_supplier_order_item(supplier_order_item_id: Int!): Boolean!
+
+  create_consumer_order(consumer_id: Int!, order_date: String!, total_amount: Float!): ConsumerOrderSchema!
+  update_consumer_order(consumer_order_id: Int!, order_date: String, total_amount: Float): ConsumerOrderSchema
+  delete_consumer_order(consumer_order_id: Int!): Boolean!
+
+  create_consumer_order_item(
+    consumer_order_id: Int!
+    product_id: Int!
+    item_name: String!
+    quantity: Int!
+    unit_price: Float!
+    total_price: Float
+  ): ConsumerOrderItemSchema!
+
+  update_consumer_order_item(
+    consumer_order_item_id: Int!
+    item_name: String
+    quantity: Int
+    unit_price: Float
+  ): ConsumerOrderItemSchema
+
+  delete_consumer_order_item(consumer_order_item_id: Int!): Boolean!
+
+  create_consumer(name: String!, contact_number: String!): ConsumerSchema!
+  update_consumer(consumer_id: Int!, name: String, contact_number: String): ConsumerSchema
+  delete_consumer(consumer_id: Int!): Boolean!
+
+  create_consumer_membership(consumer_id: Int!, start_date: String!, end_date: String): ConsumerMembershipSchema!
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+}

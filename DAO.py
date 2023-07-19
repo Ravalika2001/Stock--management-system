@@ -98,11 +98,49 @@ class SupplierDAO:
         )
         return products
     
+
+    
 #================================================================================================================================   
 
 class ProductDAO:
     def __init__(self, session: Session):
         self.session = session
+
+    def get_most_sold_product(self) -> Optional[Product]:
+        result = (
+            self.session.query(
+                ConsumerOrderItem.product_id,
+                func.sum(ConsumerOrderItem.quantity).label("total_quantity")
+            )
+            .group_by(ConsumerOrderItem.product_id)
+            .order_by(func.sum(ConsumerOrderItem.quantity).desc())
+            .first()
+        )
+        if result:
+            product_id, total_quantity = result
+            product = self.session.query(Product).get(product_id)
+            if product:
+                product.total_quantity = total_quantity
+            return product
+        return None
+
+    def get_most_bought_product(self) -> Optional[Product]:
+        result = (
+            self.session.query(
+                SupplierOrderItem.product_id,
+                func.sum(SupplierOrderItem.quantity).label("total_quantity")
+            )
+            .group_by(SupplierOrderItem.product_id)
+            .order_by(func.sum(SupplierOrderItem.quantity).desc())
+            .first()
+        )
+        if result:
+            product_id, total_quantity = result
+            product = self.session.query(Product).get(product_id)
+            if product:
+                product.total_quantity = total_quantity
+            return product
+        return None
 
     def create_product(self, name: str, unit_price: float, description: str, category_id: int) -> Product:
         product = Product(name=name, unit_price=unit_price, description=description, category_id=category_id)
@@ -292,18 +330,6 @@ class CategoryDAO:
         return categories
 
  
-    
-    
-
-    
-    
-    
-    
-    
-    
-    
-
-
 class SupplierOrderDAO:
     def __init__(self, session: Session):
         self.session = session
@@ -575,6 +601,8 @@ class ConsumerOrderItemDAO:
     def __init__(self, session: Session):
         self.session = session
 
+    
+
     def create_consumer_order_item(
         self,
         consumer_order_id: int,
@@ -660,6 +688,24 @@ class ConsumerOrderItemDAO:
             self.session.commit()
             return True
         return False
+    
+    def get_most_sold_product(self) -> Optional[Product]:
+        result = (
+            self.session.query(
+                ConsumerOrderItem.product_id,
+                func.sum(ConsumerOrderItem.quantity).label("total_quantity")
+            )
+            .group_by(ConsumerOrderItem.product_id)
+            .order_by(func.sum(ConsumerOrderItem.quantity).desc())
+            .first()
+        )
+        if result:
+            product_id, total_quantity = result
+            product = self.session.query(Product).get(product_id)
+            if product:
+                product.total_quantity = total_quantity
+            return product
+        return None
     
     
 # =====================================================================================================================

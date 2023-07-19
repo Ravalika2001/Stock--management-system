@@ -11,18 +11,18 @@ from dao import *
 from models import *
 
 @strawberry.type
-class SupplierSchema:
-    id: int
-    name: str
-    contact_number: str
-
-@strawberry.type
 class ProductSchema:
     id: int
     category_id: int
     name: str
     unit_price: float
     description: str
+
+@strawberry.type
+class SupplierSchema:
+    id: int
+    name: str
+    contact_number: str
 
 @strawberry.type
 class CategorySchema:
@@ -91,6 +91,18 @@ class Product:
     unit_price: float
     description: str
 
+@strawberry.type
+class MostSoldProductSchema:
+    product: Optional[ProductSchema]
+    total_quantity: Optional[int]
+
+
+@strawberry.type
+class MostBoughtProductSchema:
+    product: Optional[ProductSchema]
+    total_quantity: Optional[int]
+
+
 
 
 
@@ -98,6 +110,44 @@ class Product:
 
 @strawberry.type
 class Query:
+
+    @strawberry.field
+    def get_most_bought_product(self) -> MostBoughtProductSchema:
+        product_dao = ProductDAO(session)
+        product = product_dao.get_most_bought_product()
+        if product:
+            return MostBoughtProductSchema(
+                product=ProductSchema(
+                    id=product.id,
+                    category_id=product.category_id,
+                    name=product.name,
+                    unit_price=product.unit_price,
+                    description=product.description
+                ),
+                total_quantity=product.total_quantity
+            )
+        return MostBoughtProductSchema(product=None, total_quantity=None)
+    
+    @strawberry.field
+    def get_most_sold_product(self) -> MostSoldProductSchema:
+        product_dao = ProductDAO(session)
+        product = product_dao.get_most_sold_product()
+        if product:
+            return MostSoldProductSchema(
+                product=ProductSchema(
+                    id=product.id,
+                    category_id=product.category_id,
+                    name=product.name,
+                    unit_price=product.unit_price,
+                    description=product.description
+                ),
+                total_quantity=product.total_quantity
+            )
+        return MostSoldProductSchema(product=None, total_quantity=None)
+
+
+
+
     # Supplier queries
     @strawberry.field
     def get_supplier_by_id(self, supplier_id: int) -> Optional[SupplierSchema]:
@@ -294,25 +344,14 @@ class Query:
             for supplier_order_item in supplier_order_items
         ]
     
-    @strawberry.field
-    def get_category_by_supplier_id(supplier_id: int) -> List[CategorySchema]:
-        categories = (
-            session.query(Category)
-            .join(Product, Category.product_id == Product.id)
-            .join(SupplierOrderItem, Product.id == SupplierOrderItem.product_id)
-            .join(SupplierOrder, SupplierOrderItem.order_id == SupplierOrder.id)
-            .filter(SupplierOrder.supplier_id == supplier_id)
-            .all()
-        )
-
-        return [
-            CategorySchema(
-                id=category.id,
-                product_id=category.product_id,
-                category_name=category.category_name,
-            )
-            for category in categories
-        ]
+    # @strawberry.field
+    # def get_category_by_supplierid(self, supplier_id: int) -> List[CategorySchema]:
+    #     category_dao = CategoryDAO(session)
+    #     categories = category_dao.get_category_by_supplierid(supplier_id)
+    #     return [
+    #         CategorySchema(id=category.id, category_name=category.category_name)
+    #         for category in categories
+    #     ]
 # ======================================================================================================================================
     # ConsumerOrder queries
     @strawberry.field
@@ -477,27 +516,42 @@ class Query:
             return None
         
     @strawberry.field
-    def get_category_by_supplierid(self, supplier_id: int) -> List[CategorySchema]:
-        category_dao = CategoryDAO(session)
-        categories = category_dao.get_category_by_supplierid(supplier_id)
-        return [
+    def get_categories_by_supplier_id(self, supplier_id: int) -> List[CategorySchema]:
+        session = db.session
+
+        categories = (
+            session.query(Category)
+            .join(Product, Product.category_id == Category.id)
+            .join(SupplierOrderItem, SupplierOrderItem.product_id == Product.id)
+            .join(SupplierOrder, SupplierOrderItem.supplier_order_id == SupplierOrder.id)
+            .join(Supplier, SupplierOrder.supplier_id == Supplier.id)
+            .filter(Supplier.id == supplier_id)
+            .distinct(Category.id)
+            .all()
+        )
+
+        session.close()
+
+        category_schemas = [
             CategorySchema(id=category.id, category_name=category.category_name)
             for category in categories
-            ]
-    
-    @strawberry.field
-    def get_suppliers_by_category_id(self, category_id: int) -> List[SupplierSchema]:
-        supplier_dao = SupplierDAO(session)
-        suppliers = supplier_dao.get_suppliers_by_category_id(category_id)
-        return [
-            SupplierSchema(
-                id=supplier.id,
-                name=supplier.name,
-                address=supplier.contact_number,
-                # Include other fields as needed
-            )
-            for supplier in suppliers
         ]
+
+        return category_schemas
+
+    # @strawberry.field
+    # def get_suppliers_by_category_id(self, category_id: int) -> List[SupplierSchema]:
+    #     supplier_dao = SupplierDAO(session)
+    #     suppliers = supplier_dao.get_suppliers_by_category_id(category_id)
+    #     return [
+    #         SupplierSchema(
+    #             id=supplier.id,
+    #             name=supplier.name,
+    #             address=supplier.contact_number,
+    #             # Include other fields as needed
+    #         )
+    #         for supplier in suppliers
+    #     ]
 
     @strawberry.field
     def get_products_by_supplier_order_id(self, supplier_order_id: int) -> List[ProductSchema]:
@@ -575,57 +629,74 @@ class Query:
             for product in products
         ]
     
-    @strawberry.field
-    def products_by_consumer_id(self, consumer_id: int) -> ConsumerSchema:
-        consumer_dao = ConsumerDAO(session)
-        consumer = consumer_dao.get_consumer_by_id(consumer_id)
-        if consumer:
-            products = consumer_dao.get_products_by_consumer_id(consumer_id)
-            return ConsumerSchema(
-                id=consumer.id,
-                name=consumer.name,
-                products=products
-            )
-        return None
+    # @strawberry.field
+    # def products_by_consumer_id(self, consumer_id: int) -> Optional[ConsumerSchema]:
+    #     consumer_dao = ConsumerDAO(session)
+    #     consumer = consumer_dao.get_consumer_by_id(consumer_id)
+    #     if consumer:
+    #         con = consumer_dao.get_products_by_consumer_id(consumer_id)
+    #         return ConsumerSchema(
+    #             id=consumer.id,
+    #             name=consumer.name,
+    #             contact_number=consumer.contact_number,
+    #         )
+    #     return None
 
     @strawberry.field
-    def products_by_consumer_name(self, consumer_name: str) -> ConsumerSchema:
-        consumer_dao = ConsumerDAO(session)
-        consumer = consumer_dao.get_consumers_by_name(consumer_name)
-        if consumer:
-            products = consumer_dao.get_products_by_consumer_id(consumer.id)
-            return ConsumerSchema(
-                id=consumer.id,
-                name=consumer.name,
-                products=products
-            )
-        return None
-
-    @strawberry.field
-    def products_by_supplier_name(self, supplier_name: str) -> SupplierSchema:
-        supplier_dao = SupplierDAO(session)
-        supplier = supplier_dao.get_supplier_by_name(supplier_name)
-        if supplier:
-            products = supplier_dao.get_products_by_supplier_id(supplier.id)
-            return SupplierSchema(
-                id=supplier.id,
-                name=supplier.name,
-                products=products
-            )
-        return None
-    
-    @strawberry.field
-    def get_consumers_by_name(self, consumer_name: str) -> List[ConsumerSchema]:
+    def consumer_name(self, consumer_name: str) -> List[ConsumerSchema]:
         consumer_dao = ConsumerDAO(session)
         consumers = consumer_dao.get_consumers_by_name(consumer_name)
-        return [
-            ConsumerSchema(
-                id=consumer.id,
-                name=consumer.name,
-                contact_number=consumer.contact_number
+        result = []
+        for consumer in consumers:
+            products = consumer_dao.get_products_by_consumer_id(consumer.id)
+            result.append(
+                ConsumerSchema(
+                    id=consumer.id,
+                    name=consumer.name,
+                    contact_number=consumer.contact_number,
+                )
             )
-            for consumer in consumers
-        ]
+        return result
+
+    # @strawberry.field
+    # def products_by_supplier_name(self, supplier_name: str) -> List[SupplierSchema]:
+    #     supplier_dao = SupplierDAO(session)
+    #     suppliers = supplier_dao.get_supplier_by_name(supplier_name)
+    #     result = []
+    #     for supplier in suppliers:
+    #         products = supplier_dao.get_products_by_supplier_id(supplier.id)
+    #         product_schemas = [
+    #             ProductSchema(
+    #                 id=product.id,
+    #                 name=product.name,
+    #                 unit_price=product.unit_price,
+    #                 description=product.description,
+    #                 category=CategorySchema(id=product.category.id, name=product.category.category_name)
+    #             )
+    #             for product in products
+    #         ]
+    #         result.append(
+    #             SupplierSchema(
+    #                 id=supplier.id,
+    #                 name=supplier.name,
+    #                 contact_number=supplier.contact_number,
+    #                 products=product_schemas
+    #             )
+    #         )
+    #     return result
+    
+    # @strawberry.field
+    # def get_consumers_by_name(self, consumer_name: str) -> List[ConsumerSchema]:
+    #     consumer_dao = ConsumerDAO(session)
+    #     consumers = consumer_dao.get_consumers_by_name(consumer_name)
+    #     return [
+    #         ConsumerSchema(
+    #             id=consumer.id,
+    #             name=consumer.name,
+    #             contact_number=consumer.contact_number
+    #         )
+    #         for consumer in consumers
+    #     ]
 
     @strawberry.field
     def get_products_by_supplier_id(self, supplier_id: int) -> List[ProductSchema]:
